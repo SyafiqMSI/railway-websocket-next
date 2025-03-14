@@ -41,7 +41,6 @@ const SimpleUpload = () => {
   const [result, setResult] = useState<UploadResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Inisialisasi koneksi Socket.IO
   useEffect(() => {
     const socketInstance = io(API_URL);
     
@@ -108,7 +107,6 @@ const SimpleUpload = () => {
     formData.append('file', file);
     
     try {
-      // Kirim notifikasi mulai upload ke socket
       if (socket) {
         socket.emit('upload_progress', {
           filename: file.name,
