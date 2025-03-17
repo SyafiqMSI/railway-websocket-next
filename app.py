@@ -180,6 +180,71 @@ def get_file(filename):
         "message": "File tidak ditemukan"
     }), 404
 
+@app.route('/api/files/<filename>', methods=['DELETE'])
+def delete_file(filename):
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    metadata = get_all_metadata()
+    file_index = None
+    deleted_file = None
+    
+    for i, file in enumerate(metadata):
+        if file['stored_name'] == filename:
+            file_index = i
+            deleted_file = file
+            break
+    
+    if file_index is not None:
+        metadata.pop(file_index)
+        with open(METADATA_FILE, 'w') as f:
+            json.dump(metadata, f)
+        
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        
+        socketio.emit('file_deleted', deleted_file['id'])
+        
+        return jsonify({
+            "status": "success",
+            "message": "File berhasil dihapus"
+        })
+    
+    return jsonify({
+        "status": "error",
+        "message": "File tidak ditemukan"
+    }), 404
+
+@app.route('/api/files/<filename>', methods=['PUT'])
+def update_file(filename):
+    metadata = get_all_metadata()
+    file_index = None
+    
+    for i, file in enumerate(metadata):
+        if file['stored_name'] == filename:
+            file_index = i
+            break
+    
+    if file_index is not None:
+        data = request.json
+        
+        if 'original_name' in data:
+            metadata[file_index]['original_name'] = data['original_name']
+        
+        with open(METADATA_FILE, 'w') as f:
+            json.dump(metadata, f)
+        
+        socketio.emit('file_updated', metadata[file_index])
+        
+        return jsonify({
+            "status": "success",
+            "message": "File berhasil diperbarui",
+            "file_data": metadata[file_index]
+        })
+    
+    return jsonify({
+        "status": "error",
+        "message": "File tidak ditemukan"
+    }), 404
+    
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     socketio.run(app, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)

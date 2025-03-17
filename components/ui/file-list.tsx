@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, FileText, Image, Video, ExternalLink, RefreshCcw } from 'lucide-react';
+import { Loader2, FileText, Image, Video, ExternalLink, RefreshCcw, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './dropdown-menu';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './dialog';
+import { Input } from './input';
+import { Label } from './label';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './alert-dialog';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
@@ -21,6 +26,11 @@ const FileList = () => {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [editingFile, setEditingFile] = useState<FileItem | null>(null);
+  const [editName, setEditName] = useState('');
+  const [deleteFile, setDeleteFile] = useState<FileItem | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     const socketInstance = io(API_URL);
@@ -45,6 +55,16 @@ const FileList = () => {
           return new Date(b.upload_time).getTime() - new Date(a.upload_time).getTime();
         });
       });
+    });
+    
+    socketInstance.on('file_deleted', (fileId: string) => {
+      setFiles(prevFiles => prevFiles.filter(file => file.id !== fileId));
+    });
+    
+    socketInstance.on('file_updated', (fileData: FileItem) => {
+      setFiles(prevFiles => 
+        prevFiles.map(file => file.id === fileData.id ? fileData : file)
+      );
     });
     
     setSocket(socketInstance);
@@ -118,69 +138,214 @@ const FileList = () => {
     window.open(`${API_URL}/api/files/${storedName}`, '_blank');
   };
 
+  const handleEditClick = (file: FileItem) => {
+    setEditingFile(file);
+    setEditName(file.original_name);
+  };
+  
+  const handleDeleteClick = (file: FileItem) => {
+    setDeleteFile(file);
+  };
+  
+  const handleEditSave = async () => {
+    if (!editingFile) return;
+    
+    setActionLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/api/files/${editingFile.stored_name}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          original_name: editName
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        setFiles(prevFiles => 
+          prevFiles.map(file => 
+            file.id === editingFile.id ? { ...file, original_name: editName } : file
+          )
+        );
+        setEditingFile(null);
+      } else {
+        setError(data.message || 'Gagal mengubah nama file');
+      }
+    } catch (err) {
+      setError('Gagal menghubungi server API');
+      console.error(err);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+  
+  const handleDeleteConfirm = async () => {
+    if (!deleteFile) return;
+    
+    setActionLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/api/files/${deleteFile.stored_name}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        setFiles(prevFiles => prevFiles.filter(file => file.id !== deleteFile.id));
+        setDeleteFile(null);
+      } else {
+        const data = await response.json();
+        setError(data.message || 'Gagal menghapus file');
+      }
+    } catch (err) {
+      setError('Gagal menghubungi server API');
+      console.error(err);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   return (
-    <Card className="w-full">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>File yang Telah Diunggah</CardTitle>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={fetchFiles}
-          disabled={loading}
-        >
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCcw className="h-4 w-4" />
-          )}
-        </Button>
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <div className="flex justify-center p-10">
-            <Loader2 className="h-10 w-10 animate-spin text-primary" />
-          </div>
-        ) : files.length === 0 ? (
-          <p className="text-center py-10 text-gray-500">
-            Belum ada file yang diunggah
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {files.map((file) => (
-              <div 
-                key={file.id}
-                className="flex items-center justify-between p-3 border rounded-md hover:bg-gray-50"
-              >
-                <div className="flex items-center space-x-3">
-                  {getFileIcon(file.type)}
-                  <div>
-                    <p className="font-medium">{file.original_name}</p>
-                    <div className="flex gap-3 text-xs text-gray-500">
-                      <span>{formatFileSize(file.size)}</span>
-                      <span>•</span>
-                      <span>{formatDate(file.upload_time)}</span>
-                    </div>
-                  </div>
-                </div>
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={() => openFile(file.stored_name)}
-                >
-                  <ExternalLink className="h-4 w-4" />
-                </Button>
+    <>
+      <Card className="w-full">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>File yang Telah Diunggah</CardTitle>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={fetchFiles}
+            disabled={loading}
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCcw className="h-4 w-4" />
+            )}
+          </Button>
+        </CardHeader>
+        <CardContent>
+            {loading ? (
+              <div className="flex justify-center p-10">
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
               </div>
-            ))}
-          </div>
-        )}
+            ) : files.length === 0 ? (
+              <p className="text-center py-10 text-gray-500">
+                Belum ada file yang diunggah
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {files.map((file) => (
+                  <div 
+                    key={file.id}
+                    className="flex items-center justify-between p-3 border rounded-md hover:bg-gray-50"
+                  >
+                    <div className="flex items-center space-x-3">
+                      {getFileIcon(file.type)}
+                      <div>
+                        <p className="font-medium">{file.original_name}</p>
+                        <div className="flex gap-3 text-xs text-gray-500">
+                          <span>{formatFileSize(file.size)}</span>
+                          <span>•</span>
+                          <span>{formatDate(file.upload_time)}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openFile(file.stored_name)}>
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                          <span>Lihat</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleEditClick(file)}>
+                          <Pencil className="mr-2 h-4 w-4" />
+                          <span>Edit</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => handleDeleteClick(file)}
+                          className="text-red-600 focus:text-red-600"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          <span>Delete</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {error && (
+              <div className="p-4 mt-4 bg-red-50 text-red-500 rounded-md">
+                {error}
+              </div>
+            )}
+          </CardContent>
+        </Card>
         
-        {error && (
-          <div className="p-4 mt-4 bg-red-50 text-red-500 rounded-md">
-            {error}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+        {/* Edit Dialog */}
+        <Dialog open={!!editingFile} onOpenChange={(open) => !open && setEditingFile(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit File</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <Label htmlFor="filename">Nama File</Label>
+              <Input
+                id="filename"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="mt-2"
+              />
+            </div>
+            <DialogFooter>
+              <Button 
+                variant="outline" 
+                onClick={() => setEditingFile(null)}
+                disabled={actionLoading}
+              >
+                Batal
+              </Button>
+              <Button 
+                onClick={handleEditSave}
+                disabled={actionLoading || !editName.trim()}
+              >
+                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Simpan
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        
+        {/* Delete Confirmation */}
+        <AlertDialog open={!!deleteFile} onOpenChange={(open) => !open && setDeleteFile(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Konfirmasi Hapus</AlertDialogTitle>
+              <AlertDialogDescription>
+                Apakah Anda yakin ingin menghapus file "{deleteFile?.original_name}"? 
+                Tindakan ini tidak dapat dibatalkan.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={actionLoading}>Batal</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteConfirm}
+                disabled={actionLoading}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Hapus
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+    </>
   );
 };
 
