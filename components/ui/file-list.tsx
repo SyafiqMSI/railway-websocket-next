@@ -121,6 +121,16 @@ const FileList = () => {
     });
   };
 
+  const formatExecutionTime = (executionTime: string) => {
+    const timeValue = parseFloat(executionTime);
+    
+    if (isNaN(timeValue)) return executionTime;
+    
+    if (timeValue < 0.001) return `${(timeValue * 1000).toFixed(2)} μs`;
+    if (timeValue < 1) return `${(timeValue * 1000).toFixed(2)} ms`;
+    return `${timeValue.toFixed(3)} detik`;
+  };
+
   const getFileIcon = (type: string) => {
     switch (type) {
       case 'text':
@@ -242,13 +252,12 @@ const FileList = () => {
                   >
                     <div className="flex items-center space-x-3">
                       {getFileIcon(file.type)}
-                      <div>
-                        <p className="font-medium">{file.original_name}</p>
-                        <div className="flex gap-3 text-xs text-gray-500">
-                          <span>{formatFileSize(file.size)}</span>
-                          <span>•</span>
-                          <span>{formatDate(file.upload_time)}</span>
-                        </div>
+                      <div className="flex gap-3 text-xs text-gray-500">
+                        <span>{formatFileSize(file.size)}</span>
+                        <span>•</span>
+                        <span>{formatExecutionTime(file.execution_time)}</span>
+                        <span>•</span>
+                        <span>{formatDate(file.upload_time)}</span>
                       </div>
                     </div>
                     <DropdownMenu>
@@ -288,7 +297,6 @@ const FileList = () => {
           </CardContent>
         </Card>
         
-        {/* Edit Dialog */}
         <Dialog open={!!editingFile} onOpenChange={(open) => !open && setEditingFile(null)}>
           <DialogContent>
             <DialogHeader>
@@ -322,7 +330,6 @@ const FileList = () => {
           </DialogContent>
         </Dialog>
         
-        {/* Delete Confirmation */}
         <AlertDialog open={!!deleteFile} onOpenChange={(open) => !open && setDeleteFile(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
