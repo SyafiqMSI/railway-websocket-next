@@ -252,12 +252,15 @@ const FileList = () => {
                   >
                     <div className="flex items-center space-x-3">
                       {getFileIcon(file.type)}
-                      <div className="flex gap-3 text-xs text-gray-500">
-                        <span>{formatFileSize(file.size)}</span>
-                        <span>•</span>
-                        <span>{formatExecutionTime(file.execution_time)}</span>
-                        <span>•</span>
-                        <span>{formatDate(file.upload_time)}</span>
+                      <div>
+                        <p className="font-medium">{file.original_name}</p>
+                        <div className="flex gap-3 text-xs text-gray-500">
+                          <span>{formatFileSize(file.size)}</span>
+                          <span>•</span>
+                          <span>{formatExecutionTime(file.execution_time)}</span>
+                          <span>•</span>
+                          <span>{formatDate(file.upload_time)}</span>
+                        </div>
                       </div>
                     </div>
                     <DropdownMenu>
